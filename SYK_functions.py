@@ -68,20 +68,21 @@ def create_Hamiltonian(psi, N, realisations, J_squared=1):
     return H
 
 
-def G_SD(t0, dt, G_input, q, iteration_length, J_squared=1):
+def G_SD(t0, dt, G_input, q, q_t, s_squared, iteration_length):
     """Compute large N two point function from Schwinger Dyson equations.
 
     Solves the Schwinger Dyson equations numerically with an iterative algorithm and using the FFT
-    to switch between coordinate and Fourier space,.
+    to switch between coordinate and Fourier space.
 
     Args:
         t0: A float. -t0 is the inverse temperature β of the model and sets the limits of the time interval
         on which G(t) is evaluated.
         dt: A float that sets the time step.
         G_input: A function used as the initial guess for G.
-        q: Even integer ≥2. Number of fermions involved in random interactions in SYK model.
+        q: integer ≥1. Defines number of fermions involved in random interactions in 1st Hamiltonion of modified SYK model.
+        q_t: integer ≥1. Defines number of fermions involved in random interactions in 2nd (with s) Hamiltonian of modified SYK model.
+        s_squared: Coupling between two SYK models.
         iteration_length: Integer denoting many iterations to carry out.
-        J_squared: Variance of couplings is given by 'J_squared * 3!/N^3'. Set to 1 by default.
 
     Returns:
         t: Array containing time points on which functions are evaluated on.
@@ -95,7 +96,7 @@ def G_SD(t0, dt, G_input, q, iteration_length, J_squared=1):
 
     # initialize G and sigma fields
     G = G_input(t)
-    S = ne.evaluate("J_squared * (G ** (q - 1)) + (1 ** -10) * 1j")
+    S = ne.evaluate("(s_squared * 2/q_t * 1/(2**(3-2*q_t)) * (G ** (2*q_t - 1))) + (2/q * (1/(2**(3-2*q))) * (G ** (2*q - 1)))")
 
     # frequency normalization factor is 2*np.pi/dt
     # convention of sign in exponential of definition of Fourier
@@ -138,7 +139,7 @@ def G_SD(t0, dt, G_input, q, iteration_length, J_squared=1):
 
         G = ifft(ne.evaluate("Gf / phase"), Gf.size)
 
-        S = ne.evaluate("J_squared * (G ** (q - 1))")
+        S = ne.evaluate("(s_squared * 2/q_t * 1/(2**(3-2*q_t)) * (G ** (2*q_t - 1))) + (2/q * (1/(2**(3-2*q))) * (G ** (2*q - 1)))")
         Sf = ne.evaluate("S_fft * phase", {
             "S_fft": fft(S),
             "phase": phase,
