@@ -4,24 +4,15 @@
 
 # Fit the linear part of S/N to read off the specific heat of the model
 
-from SYK_functions import *
+from large_N_entropy_from_SD import calculate_entropy
 from matplotlib import pyplot as plt
 import time
-import scipy.integrate as integrate
 
 # Set variables for run
 dt = 0.0001  # Time step - must divide t0 exactly.
-J_squared = 1  # Variance of couplings is given by 'J_squared * 3!/N^3'
 q = 4  # Even integer ≥4. Number of fermions involved in random interactions in SYK model
 iteration_length = 20
 temp_range = 10 ** np.arange(-2, -1, 0.1)  # Set range of temperatures to calculate S/N for
-
-# Define initial guess for two point function: usually taken to be free theory two point function
-
-
-def G_input(x):
-    return 1 / 2 * np.sign(x)
-
 
 SbyN = []
 
@@ -29,20 +20,7 @@ for temp in temp_range:
 
     runtime_start = time.time()
 
-    t0 = -1 / temp
-    t0 = round(t0, 0)  # rounding since we want dt to divide t0
-
-    t, G, w, S, Sf = G_SD(t0, dt, G_input, q, iteration_length)
-
-    a = (1/2) * np.log(2)
-    b = (1/2) * sum(np.log(1 + Sf[1::2]/(1j * w[1::2])))
-    c = -t0/2 * integrate.simps(G[(len(G)//2):].real * S[(len(G)//2):].real - (J_squared/q)*G[(len(G)//2):].real**q,
-                                t[(len(t)//2):])
-
-    result1 = (a + b - c).real
-    result2 = np.sqrt(J_squared) * (-t0)/q * integrate.simps(G[(len(G)//2):].real**q, t[(len(t)//2):])
-
-    entropy = result1 - result2
+    entropy = calculate_entropy(dt, q, temp, iteration_length)
     SbyN.append(entropy)
 
     runtime_end = time.time()

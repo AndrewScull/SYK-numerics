@@ -1,8 +1,10 @@
 # Create Majorana Fermions and SYK Hamiltonian
 
 import numpy as np
+import numexpr as ne
 from functools import reduce
-from scipy.fft import fft, fftfreq, ifft, rfft, irfft, fftshift, ifftshift
+from scipy.fft import fftfreq
+from pyfftw.interfaces.numpy_fft import fft, ifft
 
 def create_majorana_fermions(N):
     """Create Majorana Fermions.
@@ -93,42 +95,53 @@ def G_SD(t0, dt, G_input, q, iteration_length, J_squared=1):
 
     # initialize G and sigma fields
     G = G_input(t)
-    S = J_squared*(G**(q-1)) + (1**-10)*1j
+    S = ne.evaluate("J_squared * (G ** (q - 1)) + (1 ** -10) * 1j")
 
-    # Compute Fourier transform by scipy's FFT function
-    Gf = fft(G)
-    Gf[::2] = 0
     # frequency normalization factor is 2*np.pi/dt
-    w = fftfreq(G.size)*2*np.pi/dt
+    # convention of sign in exponential of definition of Fourier
+    # transform In order to get a discretisation of the continuous Fourier
+    # transform we need to multiply g by a phase factor
+    w = ne.evaluate("-w * 2 * pi / dt", {
+        "w": fftfreq(G.size),
+        "pi": np.pi,
+        "dt": dt,
+        })
 
-    w = -w  # convention of sign in exponential of definition of Fourier transform
-    #In order to get a discretisation of the continuous Fourier transform
-    #we need to multiply g by a phase factor
+    phase = ne.evaluate("0.5 * dt * exp((-1j * t0) * w)")
 
-    phase = 0.5 * dt * np.exp((-complex(0, 1) * t0) * w)
+    Gf = ne.evaluate("G_fft * phase", {
+        "G_fft": fft(G),
+        "phase": phase,
+        })
+    Gf[::2] = 0
 
-    Gf = Gf * phase
-
-    # Compute Fourier transform by scipy's FFT function
-    Sf = fft(S)
-    Sf = Sf * phase
+    Sf = ne.evaluate("S_fft * phase", {
+        "S_fft": fft(S),
+        "phase": phase,
+        })
 
     a = 0.5
 
     for k in range(1, iteration_length):
-        Gf_adjustment = np.reciprocal(-1j * w[1::2] - Sf[1::2])
-        Gf_adjustment -= Gf[1::2]
-        Gf_adjustment *= a
+        Gf_adjustment = ne.evaluate("a * ((1 / (-1j * w - Sf)) - Gf)", {
+            "a": a,
+            "w": w[1::2],
+            "Sf": Sf[1::2],
+            "Gf": Gf[1::2],
+            })
         Gf[1::2] += Gf_adjustment
-        diff_new = np.sum(np.abs(Gf_adjustment))
+        diff_new = ne.evaluate("sum(abs(Gf_adjustment))")
         if k > 1:
             if diff_new > diff:
                 a = 0.5 * a
         diff = diff_new
 
-        G = ifft(Gf / phase, t.size)
+        G = ifft(ne.evaluate("Gf / phase"), Gf.size)
 
-        S = J_squared * (G ** (q-1))
-        Sf = fft(S) * phase
+        S = ne.evaluate("J_squared * (G ** (q - 1))")
+        Sf = ne.evaluate("S_fft * phase", {
+            "S_fft": fft(S),
+            "phase": phase,
+            })
 
     return t, G, w, S, Sf
